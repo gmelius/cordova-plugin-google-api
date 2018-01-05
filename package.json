@@ -1,11 +1,11 @@
 {
-  "version": "5.1.1",
-  "name": "cordova-plugin-googleplus",
-  "cordova_name": "Google SignIn",
+  "version": "5.1.2",
+  "name": "cordova-plugin-google-api",
+  "cordova_name": "Google API",
   "description": "Use your Google account to authenticate with the app.",
   "license": "MIT",
-  "repo": "https://github.com/EddyVerbruggen/cordova-plugin-googleplus.git",
-  "issue": "https://github.com/EddyVerbruggen/cordova-plugin-googleplus/issues",
+  "repo": "https://github.com/gmelius/cordova-plugin-google-api.git",
+  "issue": "https://github.com/gmelius/cordova-plugin-google-api/issues",
   "keywords": [
     "Google",
     "Google SignIn",

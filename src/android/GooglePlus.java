@@ -3,14 +3,15 @@ package nl.xservices.plugins;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.AccountManagerFuture;
-import android.accounts.AuthenticatorException;
-import android.accounts.OperationCanceledException;
 import android.app.Activity;
+import android.app.ProgressDialog;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.Log;
 
 import com.google.android.gms.auth.api.Auth;
@@ -22,9 +23,17 @@ import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.common.api.Status;
 import com.google.android.gms.common.api.Scope;
+import com.google.api.client.extensions.android.http.AndroidHttp;
+import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
+import com.google.api.client.http.HttpTransport;
+import com.google.api.client.json.JsonFactory;
+import com.google.api.client.json.jackson2.JacksonFactory;
+import com.google.api.client.util.ExponentialBackOff;
+import com.google.api.services.gmail.GmailScopes;
+import com.google.gson.Gson;
 
 import org.apache.cordova.*;
-import org.apache.cordova.engine.SystemWebChromeClient;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -36,15 +45,28 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
 import android.content.pm.Signature;
+import android.widget.Toast;
 
 /**
  * Originally written by Eddy Verbruggen (http://github.com/EddyVerbruggen/cordova-plugin-googleplus)
  * Forked/Duplicated and Modified by PointSource, LLC, 2016.
  */
 public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConnectionFailedListener {
+    ProgressDialog mProgress;
+    private Context androidContext;
+
+    private String loadingText = "Loading...";
 
     public static final String ACTION_IS_AVAILABLE = "isAvailable";
+    private static final String ACTION_GOOGLE_API_CALL = "callGoogleApi";
     public static final String ACTION_LOGIN = "login";
     public static final String ACTION_TRY_SILENT_LOGIN = "trySilentLogin";
     public static final String ACTION_LOGOUT = "logout";
@@ -65,14 +87,17 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
     public static final String TAG = "GooglePlugin";
     public static final int RC_GOOGLEPLUS = 77552; // Request Code to identify our plugin's activities
     public static final int KAssumeStaleTokenSec = 60;
+    private static final String[] SCOPES = {GmailScopes.MAIL_GOOGLE_COM };
 
     // Wraps our service connection to Google Play services and provides access to the users sign in state and Google APIs
     private GoogleApiClient mGoogleApiClient;
     private CallbackContext savedCallbackContext;
+    private GoogleAccountCredential mCredential;
 
     @Override
     public void initialize(CordovaInterface cordova, CordovaWebView webView) {
         super.initialize(cordova, webView);
+        androidContext = webView.getContext();
     }
 
     @Override
@@ -110,12 +135,54 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
         } else if (ACTION_GET_SIGNING_CERTIFICATE_FINGERPRINT.equals(action)) {
             getSigningCertificateFingerprint();
 
+        } else if (ACTION_GOOGLE_API_CALL.equals(action)) {
+            callGoogleApi(callbackContext, args.optJSONObject(0));
         } else {
             Log.i(TAG, "This action doesn't exist");
             return false;
 
         }
         return true;
+    }
+
+    private static Map<String, String> jsonToMap(JSONObject json) throws JSONException {
+        Map<String, String> retMap = new HashMap<String, String>();
+
+        if(json != JSONObject.NULL) {
+            retMap = toMap(json);
+        }
+        return retMap;
+    }
+
+    private static Map<String, String> toMap(JSONObject object) throws JSONException {
+        Map<String, String> map = new HashMap<String, String>();
+
+        Iterator<String> keysItr = object.keys();
+        while(keysItr.hasNext()) {
+            String key = keysItr.next();
+            if (object.optString(key) != null) {
+                String value = object.getString(key);
+                map.put(key, value);
+            }
+        }
+        return map;
+    }
+
+    private void callGoogleApi(final CallbackContext savedCallbackContext, final JSONObject jsonObject) {
+        // Get a handler that can be used to post to the main thread
+        Handler mainHandler = new Handler(androidContext.getMainLooper());
+
+        Runnable myRunnable = new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    new MakeRequestTask(savedCallbackContext, mCredential, jsonToMap(jsonObject.getJSONObject("urlParams")), jsonObject.getString("requestMethod"), jsonObject.getJSONObject("data").toString(), jsonObject.getString("requestUrl")).execute();
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            } // This is your code
+        };
+        mainHandler.post(myRunnable);
     }
 
     /**
@@ -178,8 +245,8 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
         Log.i(TAG, "Building GoogleApiClient");
 
         GoogleApiClient.Builder builder = new GoogleApiClient.Builder(webView.getContext())
-            .addOnConnectionFailedListener(this)
-            .addApi(Auth.GOOGLE_SIGN_IN_API, gso.build());
+                .addOnConnectionFailedListener(this)
+                .addApi(Auth.GOOGLE_SIGN_IN_API, gso.build());
 
         this.mGoogleApiClient = builder.build();
 
@@ -324,8 +391,8 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
         }
 
         if (signInResult == null) {
-          savedCallbackContext.error("SignInResult is null");
-          return;
+            savedCallbackContext.error("SignInResult is null");
+            return;
         }
 
         Log.i(TAG, "Handling SignIn Result");
@@ -343,7 +410,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
                     JSONObject result = new JSONObject();
                     try {
                         JSONObject accessTokenBundle = getAuthToken(
-                            cordova.getActivity(), acct.getAccount(), true
+                                cordova.getActivity(), acct.getAccount(), true
                         );
                         result.put(FIELD_ACCESS_TOKEN, accessTokenBundle.get(FIELD_ACCESS_TOKEN));
                         result.put(FIELD_TOKEN_EXPIRES, accessTokenBundle.get(FIELD_TOKEN_EXPIRES));
@@ -356,6 +423,9 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
                         result.put("familyName", acct.getFamilyName());
                         result.put("givenName", acct.getGivenName());
                         result.put("imageUrl", acct.getPhotoUrl());
+                        mCredential = GoogleAccountCredential.usingOAuth2(androidContext, Arrays.asList(SCOPES));
+                        mCredential.setBackOff(new ExponentialBackOff());
+                        mCredential.setSelectedAccountName(acct.getEmail());
                         savedCallbackContext.success(result);
                     } catch (Exception e) {
                         savedCallbackContext.error("Trouble obtaining result, error: " + e.getMessage());
@@ -420,7 +490,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
         HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
         urlConnection.setInstanceFollowRedirects(true);
         String stringResponse = fromStream(
-            new BufferedInputStream(urlConnection.getInputStream())
+                new BufferedInputStream(urlConnection.getInputStream())
         );
         /* expecting:
         {
@@ -434,7 +504,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
 
         Log.d("AuthenticatedBackend", "token: " + authToken + ", verification: " + stringResponse);
         JSONObject jsonResponse = new JSONObject(
-            stringResponse
+                stringResponse
         );
         int expires_in = jsonResponse.getInt(FIELD_TOKEN_EXPIRES_IN);
         if (expires_in < KAssumeStaleTokenSec) {
@@ -454,5 +524,96 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
         }
         reader.close();
         return sb.toString();
+    }
+
+    private class MakeRequestTask extends AsyncTask<Void, Void, String> {
+        private com.google.api.services.gmail.Gmail mService = null;
+        private Map<String, String> urlParams;
+        private CallbackContext savedCallbackContext;
+        private String requestMethod;
+        private String jsonObject;
+        private String requestUrl;
+
+        MakeRequestTask(CallbackContext savedCallbackContext, GoogleAccountCredential credential, Map<String, String> urlParams, String requestMethod, String jsonObject, String requestUrl) {
+            this.savedCallbackContext = savedCallbackContext;
+            this.requestMethod = requestMethod;
+            this.jsonObject = jsonObject;
+            this.requestUrl = requestUrl;
+            HttpTransport transport = AndroidHttp.newCompatibleTransport();
+            JsonFactory jsonFactory = JacksonFactory.getDefaultInstance();
+            mService = new com.google.api.services.gmail.Gmail.Builder(
+                    transport, jsonFactory, credential)
+                    .setApplicationName("Gmail API Usage")
+                    .build();
+            this.urlParams = urlParams;
+        }
+
+        /**
+         * Background task to call Gmail API.
+         * @param params no parameters needed for this task.
+         */
+        @Override
+        protected String doInBackground(Void... params) {
+            try {
+                return getDataFromApi();
+            } catch (Exception e) {
+                cancel(true);
+                return null;
+            }
+        }
+
+        /**
+         * Fetch a list of Gmail labels attached to the specified account.
+         * @return List of Strings labels.
+         * @throws IOException
+         */
+        private String getDataFromApi() throws IOException {
+            try {
+                //hs.put("userId", "me");
+                //Object t1 = new GoogleApiRequest<Object>(mService, "GET", "{userId}/labels", null, Object.class, urlParams).execute();
+                Object t1 = new GoogleApiRequest<Object>(mService, requestMethod, requestUrl, jsonObject, Object.class, urlParams).execute();
+                String t2 = new Gson().toJson(t1);
+                return t2;
+            }catch (Exception e) {
+                System.out.println("asdfasdff" + e.toString());
+            }
+            return null;
+        }
+
+
+        @Override
+        protected void onPreExecute() {
+            mProgress = new ProgressDialog(GooglePlus.this.androidContext);
+            mProgress.setMessage(loadingText);
+            mProgress.show();
+        }
+
+        @Override
+        protected void onPostExecute(String output) {
+            mProgress.hide();
+            //Toast.makeText(androidContext, output, Toast.LENGTH_LONG).show();
+            savedCallbackContext.success(output);
+        }
+
+        @Override
+        protected void onCancelled() {
+            mProgress.hide();
+            /*if (mLastError != null) {
+                if (mLastError instanceof GooglePlayServicesAvailabilityIOException) {
+                    showGooglePlayServicesAvailabilityErrorDialog(
+                            ((GooglePlayServicesAvailabilityIOException) mLastError)
+                                    .getConnectionStatusCode());
+                } else if (mLastError instanceof UserRecoverableAuthIOException) {
+                    startActivityForResult(
+                            ((UserRecoverableAuthIOException) mLastError).getIntent(),
+                            MainActivity.REQUEST_AUTHORIZATION);
+                } else {
+                    mOutputText.setText("The following error occurred:\n"
+                            + mLastError.getMessage());
+                }
+            } else {
+                mOutputText.setText("Request cancelled.");
+            }*/
+        }
     }
 }
