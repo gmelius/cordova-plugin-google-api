@@ -60,7 +60,6 @@ import android.widget.Toast;
  * Forked/Duplicated and Modified by PointSource, LLC, 2016.
  */
 public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConnectionFailedListener {
-    ProgressDialog mProgress;
     private Context androidContext;
 
     private String loadingText = "Loading...";
@@ -583,21 +582,16 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
 
         @Override
         protected void onPreExecute() {
-            mProgress = new ProgressDialog(GooglePlus.this.androidContext);
-            mProgress.setMessage(loadingText);
-            mProgress.show();
         }
 
         @Override
         protected void onPostExecute(String output) {
-            mProgress.hide();
             //Toast.makeText(androidContext, output, Toast.LENGTH_LONG).show();
             savedCallbackContext.success(output);
         }
 
         @Override
         protected void onCancelled() {
-            mProgress.hide();
             /*if (mLastError != null) {
                 if (mLastError instanceof GooglePlayServicesAvailabilityIOException) {
                     showGooglePlayServicesAvailabilityErrorDialog(
