@@ -59,6 +59,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 
 import android.content.pm.Signature;
 import android.widget.Toast;
@@ -190,7 +191,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
                     JSONArray array = jsonObject.getJSONArray("requests");
                     for (int i = 0 ; i < array.length(); i++) {
                         JSONObject obj = array.getJSONObject(i);
-                        requests.add(new BatchRequestPojo(jsonObject.getString("requestMethod"), jsonObject.getString("requestUrl"), jsonObject.has("data") ? jsonObject.getJSONObject("data").toString() : null, jsonToMap(jsonObject.getJSONObject("urlParams"))));
+                        requests.add(new BatchRequestPojo(obj.getString("requestMethod"), obj.getString("requestUrl"), obj.has("data") ? obj.getJSONObject("data").toString() : null, jsonToMap(obj.getJSONObject("urlParams"))));
                     }
 
                     new BatchRequestCordova(savedCallbackContext, mCredential, requests).execute();
@@ -646,7 +647,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
         }
     }
 
-    private class BatchRequestCordova extends AsyncTask<Void, Void, String> {
+    private class BatchRequestCordova extends AsyncTask<Void, Void, ArrayList<Object>> {
         private final List<GoogleApiRequest<Object>> requests;
         private com.google.api.services.gmail.Gmail mService = null;
         private CallbackContext savedCallbackContext;
@@ -670,7 +671,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
          * @param params no parameters needed for this task.
          */
         @Override
-        protected String doInBackground(Void... params) {
+        protected ArrayList<Object> doInBackground(Void... params) {
             try {
                 return getDataFromApi(this.requests);
             } catch (Exception e) {
@@ -679,32 +680,42 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
             }
         }
 
-        private String getDataFromApi(List<GoogleApiRequest<Object>> requests) throws IOException {
+        private ArrayList<Object> getDataFromApi(List<GoogleApiRequest<Object>> requests) throws IOException {
             try {
+                final CountDownLatch latcher = new CountDownLatch(requests.size());
                 BatchRequest batch = mService.batch();
-
+                final ArrayList<Object> results = new ArrayList<Object>();
                 for (GoogleApiRequest<Object> gooleApiRequest:
                      requests) {
                     gooleApiRequest.queue(batch, Object.class, new BatchCallback<Object, Object>() {
                         @Override
                         public void onSuccess(Object o, HttpHeaders responseHeaders) throws IOException {
-                            String t2 = new Gson().toJson(o);
-                            savedCallbackContext.success(t2);
+                            results.add(o);
+                            latcher.countDown();
                         }
 
                         @Override
                         public void onFailure(Object s, HttpHeaders responseHeaders) throws IOException {
                             String t2 = new Gson().toJson(s);
+                            latcher.countDown();
                             savedCallbackContext.error(t2);
                         }
                     });
                 }
 
                 batch.execute();
+                latcher.await();
+                return results;
             }catch (Exception e) {
                 System.out.println("asdfasdff" + e.toString());
             }
             return null;
+        }
+
+        @Override
+        protected void onPostExecute(ArrayList<Object> objects) {
+            super.onPostExecute(objects);
+            savedCallbackContext.success(new Gson().toJson(objects));
         }
     }
 }
