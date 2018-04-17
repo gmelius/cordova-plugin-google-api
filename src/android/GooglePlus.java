@@ -175,27 +175,6 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
         return map;
     }
 
-    private void test () {
-        JsonBatchCallback<Message> callback = new JsonBatchCallback<Message>() {
-
-            public void onSuccess(Message calendar, HttpHeaders responseHeaders) {
-                // printCalendar(calendar);
-                // addedCalendarsUsingBatch.add(calendar);
-            }
-
-            public void onFailure(GoogleJsonError e, HttpHeaders responseHeaders) {
-                System.out.println("Error Message: " + e.getMessage());
-            }
-        };
-
-        Gmail client2 = new com.google.api.services.gmail.Gmail.Builder(
-                null, null, null)
-                .setApplicationName("Gmail API Usage")
-                .build();
-        BatchRequest batch = client2.batch();
-
-    }
-
     private void callBatchGoogleApi(final CallbackContext savedCallbackContext, final JSONObject jsonObject) {
         // Get a handler that can be used to post to the main thread
         Handler mainHandler = new Handler(androidContext.getMainLooper());
