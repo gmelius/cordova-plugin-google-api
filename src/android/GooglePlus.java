@@ -24,12 +24,20 @@ import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.common.api.Status;
 import com.google.android.gms.common.api.Scope;
 import com.google.api.client.extensions.android.http.AndroidHttp;
+import com.google.api.client.googleapis.batch.BatchCallback;
+import com.google.api.client.googleapis.batch.BatchRequest;
+import com.google.api.client.googleapis.batch.json.JsonBatchCallback;
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
+import com.google.api.client.googleapis.json.GoogleJsonError;
+import com.google.api.client.http.HttpHeaders;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.ExponentialBackOff;
+import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.GmailScopes;
+import com.google.api.services.gmail.model.ListThreadsResponse;
+import com.google.api.services.gmail.model.Message;
 import com.google.gson.Gson;
 
 import org.apache.cordova.*;
@@ -167,6 +175,51 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
         return map;
     }
 
+    private void test () {
+        JsonBatchCallback<Message> callback = new JsonBatchCallback<Message>() {
+
+            public void onSuccess(Message calendar, HttpHeaders responseHeaders) {
+                // printCalendar(calendar);
+                // addedCalendarsUsingBatch.add(calendar);
+            }
+
+            public void onFailure(GoogleJsonError e, HttpHeaders responseHeaders) {
+                System.out.println("Error Message: " + e.getMessage());
+            }
+        };
+
+        Gmail client2 = new com.google.api.services.gmail.Gmail.Builder(
+                null, null, null)
+                .setApplicationName("Gmail API Usage")
+                .build();
+        BatchRequest batch = client2.batch();
+
+    }
+
+    private void callBatchGoogleApi(final CallbackContext savedCallbackContext, final JSONObject jsonObject) {
+        // Get a handler that can be used to post to the main thread
+        Handler mainHandler = new Handler(androidContext.getMainLooper());
+
+        Runnable myRunnable = new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    List<BatchRequestPojo> requests = new ArrayList<BatchRequestPojo>();
+                    JSONArray array = jsonObject.getJSONArray("requests");
+                    for (int i = 0 ; i < array.length(); i++) {
+                        JSONObject obj = array.getJSONObject(i);
+                        requests.add(new BatchRequestPojo(jsonObject.getString("requestMethod"), jsonObject.getString("requestUrl"), jsonObject.has("data") ? jsonObject.getJSONObject("data").toString() : null, jsonToMap(jsonObject.getJSONObject("urlParams"))));
+                    }
+
+                    new BatchRequestCordova(savedCallbackContext, mCredential, requests).execute();
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            } // This is your code
+        };
+        mainHandler.post(myRunnable);
+    }
+
     private void callGoogleApi(final CallbackContext savedCallbackContext, final JSONObject jsonObject) {
         // Get a handler that can be used to post to the main thread
         Handler mainHandler = new Handler(androidContext.getMainLooper());
@@ -175,7 +228,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
             @Override
             public void run() {
                 try {
-                    new MakeRequestTask(savedCallbackContext, mCredential, jsonToMap(jsonObject.getJSONObject("urlParams")), jsonObject.getString("requestMethod"), jsonObject.getJSONObject("data").toString(), jsonObject.getString("requestUrl")).execute();
+                    new MakeRequestTask(savedCallbackContext, mCredential, jsonToMap(jsonObject.getJSONObject("urlParams")), jsonObject.getString("requestMethod"), jsonObject.has("data") ? jsonObject.getJSONObject("data").toString() : null, jsonObject.getString("requestUrl")).execute();
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -424,7 +477,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
                         result.put("imageUrl", acct.getPhotoUrl());
                         mCredential = GoogleAccountCredential.usingOAuth2(androidContext, Arrays.asList(SCOPES));
                         mCredential.setBackOff(new ExponentialBackOff());
-                        mCredential.setSelectedAccountName(acct.getEmail());
+                        mCredential.setSelectedAccount(acct.getAccount());
                         savedCallbackContext.success(result);
                     } catch (Exception e) {
                         savedCallbackContext.error("Trouble obtaining result, error: " + e.getMessage());
@@ -608,6 +661,67 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
             } else {
                 mOutputText.setText("Request cancelled.");
             }*/
+        }
+    }
+
+    private class BatchRequestCordova extends AsyncTask<Void, Void, String> {
+        private final List<GoogleApiRequest<Object>> requests;
+        private com.google.api.services.gmail.Gmail mService = null;
+        private CallbackContext savedCallbackContext;
+
+        BatchRequestCordova(CallbackContext savedCallbackContext, GoogleAccountCredential credential, List<BatchRequestPojo> requestsPojo) {
+            this.savedCallbackContext = savedCallbackContext;
+            HttpTransport transport = AndroidHttp.newCompatibleTransport();
+            JsonFactory jsonFactory = JacksonFactory.getDefaultInstance();
+            mService = new com.google.api.services.gmail.Gmail.Builder(
+                    transport, jsonFactory, credential)
+                    .setApplicationName("Gmail API Usage")
+                    .build();
+            requests = new ArrayList<GoogleApiRequest<Object>>();
+            for (BatchRequestPojo request: requestsPojo) {
+                this.requests.add(new GoogleApiRequest<Object>(mService, request.getRequestMethod(), request.getRequestUrl(), request.getJsonObject(), Object.class, request.getUrlParams()));
+            }
+        }
+
+        /**
+         * Background task to call Gmail API.
+         * @param params no parameters needed for this task.
+         */
+        @Override
+        protected String doInBackground(Void... params) {
+            try {
+                return getDataFromApi(this.requests);
+            } catch (Exception e) {
+                cancel(true);
+                return null;
+            }
+        }
+
+        private String getDataFromApi(List<GoogleApiRequest<Object>> requests) throws IOException {
+            try {
+                BatchRequest batch = mService.batch();
+
+                for (GoogleApiRequest<Object> gooleApiRequest:
+                     requests) {
+                    gooleApiRequest.queue(batch, Object.class, new BatchCallback<Object, String>() {
+                        @Override
+                        public void onSuccess(Object o, HttpHeaders responseHeaders) throws IOException {
+                            String t2 = new Gson().toJson(o);
+                            savedCallbackContext.success(t2);
+                        }
+
+                        @Override
+                        public void onFailure(String s, HttpHeaders responseHeaders) throws IOException {
+                            savedCallbackContext.error(s);
+                        }
+                    });
+                }
+
+                batch.execute();
+            }catch (Exception e) {
+                System.out.println("asdfasdff" + e.toString());
+            }
+            return null;
         }
     }
 }
