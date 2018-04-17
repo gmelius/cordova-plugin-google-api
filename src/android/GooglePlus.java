@@ -73,6 +73,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
     private String loadingText = "Loading...";
 
     public static final String ACTION_IS_AVAILABLE = "isAvailable";
+    private static final String ACTION_GOOGLE_API_BATCH_CALL = "callBatchGoogleApi";
     private static final String ACTION_GOOGLE_API_CALL = "callGoogleApi";
     public static final String ACTION_LOGIN = "login";
     public static final String ACTION_TRY_SILENT_LOGIN = "trySilentLogin";
@@ -144,6 +145,8 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
 
         } else if (ACTION_GOOGLE_API_CALL.equals(action)) {
             callGoogleApi(callbackContext, args.optJSONObject(0));
+        } else if (ACTION_GOOGLE_API_BATCH_CALL.equals(action)) {
+            callBatchGoogleApi(callbackContext, args.optJSONObject(0));
         } else {
             Log.i(TAG, "This action doesn't exist");
             return false;
