@@ -29,6 +29,10 @@ GooglePlus.prototype.callGoogleApi = function (options, successCallback, errorCa
   cordova.exec(successCallback, errorCallback, "GooglePlus", "callGoogleApi", [options]);
 };
 
+GooglePlus.prototype.callBatchGoogleApi = function (options, successCallback, errorCallback) {
+  cordova.exec(successCallback, errorCallback, "GooglePlus", "callBatchGoogleApi", [options]);
+};
+
 GooglePlus.install = function () {
   if (!window.plugins) {
     window.plugins = {};
