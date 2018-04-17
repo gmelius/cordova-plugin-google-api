@@ -682,7 +682,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
 
                 for (GoogleApiRequest<Object> gooleApiRequest:
                      requests) {
-                    gooleApiRequest.queue(batch, Object.class, new BatchCallback<Object, String>() {
+                    gooleApiRequest.queue(batch, Object.class, new BatchCallback<Object, Object>() {
                         @Override
                         public void onSuccess(Object o, HttpHeaders responseHeaders) throws IOException {
                             String t2 = new Gson().toJson(o);
@@ -690,8 +690,9 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
                         }
 
                         @Override
-                        public void onFailure(String s, HttpHeaders responseHeaders) throws IOException {
-                            savedCallbackContext.error(s);
+                        public void onFailure(Object s, HttpHeaders responseHeaders) throws IOException {
+                            String t2 = new Gson().toJson(s);
+                            savedCallbackContext.error(t2);
                         }
                     });
                 }
