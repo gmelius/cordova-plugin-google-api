@@ -88,7 +88,7 @@ public class GoogleApiRequest<T> extends GenericData {
     private final String uriTemplate;
 
     /** URI params to replace in the url. */
-    private final Map<String, String> uriParams;
+    private final Map<String, Object> uriParams;
 
     /** HTTP content or {@code null} for none. */
     private final HttpContent httpContent;
@@ -128,12 +128,12 @@ public class GoogleApiRequest<T> extends GenericData {
      * @param responseClass response class to parse into
      */
     public GoogleApiRequest(AbstractGoogleJsonClient abstractGoogleClient,
-                            String requestMethod, String uriTemplate, String jsonContent, Class<T> responseClass, Map<String, String> uriParams) {
+                            String requestMethod, String uriTemplate, String jsonContent, Class<T> responseClass, Map<String, Object> uriParams) {
         this.responseClass = Preconditions.checkNotNull(responseClass);
         this.abstractGoogleClient = Preconditions.checkNotNull(abstractGoogleClient);
         this.requestMethod = Preconditions.checkNotNull(requestMethod);
         this.uriTemplate = Preconditions.checkNotNull(uriTemplate);
-        this.httpContent = jsonContent != null ? new JsonHttpContent(new JacksonFactory(), jsonContent) : null;
+        this.httpContent = jsonContent != null ? new BasicHttpContent(jsonContent) : null;
         this.uriParams = uriParams;
         // application name
         String applicationName = abstractGoogleClient.getApplicationName();

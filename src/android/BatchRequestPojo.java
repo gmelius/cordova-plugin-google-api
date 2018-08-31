@@ -10,9 +10,9 @@ public class BatchRequestPojo {
     private String requestMethod;
     private String requestUrl;
     private String jsonObject;
-    private Map<String,String> urlParams;
+    private Map<String,Object> urlParams;
 
-    public BatchRequestPojo(String requestMethod, String requestUrl, String jsonObject, Map<String, String> urlParams) {
+    public BatchRequestPojo(String requestMethod, String requestUrl, String jsonObject, Map<String, Object> urlParams) {
         this.requestMethod = requestMethod;
         this.requestUrl = requestUrl;
         this.jsonObject = jsonObject;
@@ -27,7 +27,7 @@ public class BatchRequestPojo {
         return requestUrl;
     }
 
-    public Map<String, String> getUrlParams() {
+    public Map<String, Object> getUrlParams() {
         return urlParams;
     }
 

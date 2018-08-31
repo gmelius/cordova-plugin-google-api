@@ -46,6 +46,9 @@
     </config-file>
 
     <source-file src="src/android/GooglePlus.java" target-dir="src/nl/xservices/plugins"/>
+    <source-file src="src/android/BasicHttpContent.java" target-dir="src/nl/xservices/plugins"/>
+    <source-file src="src/android/BatchRequestPojo.java" target-dir="src/nl/xservices/plugins"/>
+    <source-file src="src/android/GoogleApiRequest.java" target-dir="src/nl/xservices/plugins"/>
   </platform>
 
   <!-- ios -->

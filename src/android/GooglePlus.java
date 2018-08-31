@@ -4,43 +4,42 @@ import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.AccountManagerFuture;
 import android.app.Activity;
-import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.Signature;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
 
 import com.google.android.gms.auth.api.Auth;
-import com.google.android.gms.auth.api.signin.GoogleSignInResult;
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+import com.google.android.gms.auth.api.signin.GoogleSignInResult;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.ResultCallback;
-import com.google.android.gms.common.api.Status;
 import com.google.android.gms.common.api.Scope;
+import com.google.android.gms.common.api.Status;
 import com.google.api.client.extensions.android.http.AndroidHttp;
 import com.google.api.client.googleapis.batch.BatchCallback;
 import com.google.api.client.googleapis.batch.BatchRequest;
-import com.google.api.client.googleapis.batch.json.JsonBatchCallback;
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
-import com.google.api.client.googleapis.json.GoogleJsonError;
 import com.google.api.client.http.HttpHeaders;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.ExponentialBackOff;
-import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.GmailScopes;
-import com.google.api.services.gmail.model.ListThreadsResponse;
-import com.google.api.services.gmail.model.Message;
 import com.google.gson.Gson;
 
-import org.apache.cordova.*;
+import org.apache.cordova.CallbackContext;
+import org.apache.cordova.CordovaArgs;
+import org.apache.cordova.CordovaInterface;
+import org.apache.cordova.CordovaPlugin;
+import org.apache.cordova.CordovaWebView;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -60,9 +59,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
-
-import android.content.pm.Signature;
-import android.widget.Toast;
 
 /**
  * Originally written by Eddy Verbruggen (http://github.com/EddyVerbruggen/cordova-plugin-googleplus)
@@ -90,6 +86,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
     //String options/config object names passed in to login and trySilentLogin
     public static final String ARGUMENT_WEB_CLIENT_ID = "webClientId";
     public static final String ARGUMENT_SCOPES = "scopes";
+    public static final String ARGUMENT_ACCOUNT_NAME = "accountName";
     public static final String ARGUMENT_OFFLINE_KEY = "offline";
     public static final String ARGUMENT_HOSTED_DOMAIN = "hostedDomain";
 
@@ -99,7 +96,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
     private static final String[] SCOPES = {GmailScopes.MAIL_GOOGLE_COM };
 
     // Wraps our service connection to Google Play services and provides access to the users sign in state and Google APIs
-    private GoogleApiClient mGoogleApiClient;
+    private GoogleApiClient mCurrentGoogleApiClient;
     private CallbackContext savedCallbackContext;
     private GoogleAccountCredential mCredential;
 
@@ -156,8 +153,8 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
         return true;
     }
 
-    private static Map<String, String> jsonToMap(JSONObject json) throws JSONException {
-        Map<String, String> retMap = new HashMap<String, String>();
+    private static Map<String, Object> jsonToMap(JSONObject json) throws JSONException {
+        Map<String, Object> retMap = new HashMap<String, Object>();
 
         if(json != JSONObject.NULL) {
             retMap = toMap(json);
@@ -165,15 +162,24 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
         return retMap;
     }
 
-    private static Map<String, String> toMap(JSONObject object) throws JSONException {
-        Map<String, String> map = new HashMap<String, String>();
+    private static Map<String, Object> toMap(JSONObject object) throws JSONException {
+        Map<String, Object> map = new HashMap<String, Object>();
 
         Iterator<String> keysItr = object.keys();
         while(keysItr.hasNext()) {
             String key = keysItr.next();
             if (object.optString(key) != null) {
-                String value = object.getString(key);
-                map.put(key, value);
+                Object value = object.get(key);
+                ArrayList<String> values = new ArrayList<>();
+                if(value.getClass() == JSONArray.class) {
+                    JSONArray jArray = (JSONArray) value;
+                    for (int i = 0; i < jArray.length(); i++){
+                        values.add(jArray.getString(i));
+                    }
+                    map.put(key, values);
+                } else {
+                    map.put(key, value);
+                }
             }
         }
         return map;
@@ -191,7 +197,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
                     JSONArray array = jsonObject.getJSONArray("requests");
                     for (int i = 0 ; i < array.length(); i++) {
                         JSONObject obj = array.getJSONObject(i);
-                        requests.add(new BatchRequestPojo(obj.getString("requestMethod"), obj.getString("requestUrl"), obj.has("data") ? obj.getJSONObject("data").toString() : null, jsonToMap(obj.getJSONObject("urlParams"))));
+                        requests.add(new BatchRequestPojo(obj.getString("requestMethod"), obj.getString("requestUrl"), obj.has("body") ? obj.getJSONObject("body").toString() : null, jsonToMap(obj.getJSONObject("urlParams"))));
                     }
 
                     new BatchRequestCordova(savedCallbackContext, mCredential, requests).execute();
@@ -211,7 +217,14 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
             @Override
             public void run() {
                 try {
-                    new MakeRequestTask(savedCallbackContext, mCredential, jsonToMap(jsonObject.getJSONObject("urlParams")), jsonObject.getString("requestMethod"), jsonObject.has("data") ? jsonObject.getJSONObject("data").toString() : null, jsonObject.getString("requestUrl")).execute();
+                    new MakeRequestTask(
+                            savedCallbackContext,
+                            mCredential,
+                            jsonToMap(jsonObject.getJSONObject("urlParams")),
+                            jsonObject.getString("requestMethod"),
+                            jsonObject.has("body") ? jsonObject.getJSONObject("body").toString() : null,
+                            jsonObject.getString("requestUrl")
+                    ).execute();
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -231,9 +244,9 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
 
         //If options have been passed in, they could be different, so force a rebuild of the client
         // disconnect old client iff it exists
-        if (this.mGoogleApiClient != null) this.mGoogleApiClient.disconnect();
+        if (this.mCurrentGoogleApiClient != null) this.mCurrentGoogleApiClient.disconnect();
         // nullify
-        this.mGoogleApiClient = null;
+        this.mCurrentGoogleApiClient = null;
 
         Log.i(TAG, "Building Google options");
 
@@ -242,6 +255,11 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
 
         // request the default scopes
         gso.requestEmail().requestProfile();
+        // If given, set the account name
+        String accountName = clientOptions.optString(ARGUMENT_ACCOUNT_NAME, null);
+        if (accountName != null && !accountName.isEmpty()) {
+            gso.setAccountName(accountName);
+        }
 
         // We're building the scopes on the Options object instead of the API Client
         // b/c of what was said under the "addScope" method here:
@@ -283,7 +301,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
                 .addOnConnectionFailedListener(this)
                 .addApi(Auth.GOOGLE_SIGN_IN_API, gso.build());
 
-        this.mGoogleApiClient = builder.build();
+        this.mCurrentGoogleApiClient = builder.build();
 
         Log.i(TAG, "GoogleApiClient built");
     }
@@ -295,7 +313,12 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
      * Starts the sign in flow with a new Intent, which should respond to our activity listener here.
      */
     private void signIn() {
-        Intent signInIntent = Auth.GoogleSignInApi.getSignInIntent(this.mGoogleApiClient);
+        // If the current user is connected, disconnect it before try a new signIn:
+        ConnectionResult apiConnect = mCurrentGoogleApiClient.blockingConnect();
+        if (apiConnect.isSuccess()) {
+                Auth.GoogleSignInApi.signOut(this.mCurrentGoogleApiClient);
+        }
+        Intent signInIntent = Auth.GoogleSignInApi.getSignInIntent(this.mCurrentGoogleApiClient);
         cordova.getActivity().startActivityForResult(signInIntent, RC_GOOGLEPLUS);
     }
 
@@ -303,26 +326,25 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
      * Tries to log the user in silently using existing sign in result information
      */
     private void trySilentLogin() {
-        ConnectionResult apiConnect =  mGoogleApiClient.blockingConnect();
-
+        ConnectionResult apiConnect =  mCurrentGoogleApiClient.blockingConnect();
         if (apiConnect.isSuccess()) {
-            handleSignInResult(Auth.GoogleSignInApi.silentSignIn(this.mGoogleApiClient).await());
+            handleSignInResult(Auth.GoogleSignInApi.silentSignIn(this.mCurrentGoogleApiClient).await());
         }
     }
+
 
     /**
      * Signs the user out from the client
      */
     private void signOut() {
-        if (this.mGoogleApiClient == null) {
+        if (this.mCurrentGoogleApiClient == null) {
             savedCallbackContext.error("Please use login or trySilentLogin before logging out");
             return;
         }
 
-        ConnectionResult apiConnect = mGoogleApiClient.blockingConnect();
-
+        ConnectionResult apiConnect = mCurrentGoogleApiClient.blockingConnect();
         if (apiConnect.isSuccess()) {
-            Auth.GoogleSignInApi.signOut(this.mGoogleApiClient).setResultCallback(
+            Auth.GoogleSignInApi.signOut(this.mCurrentGoogleApiClient).setResultCallback(
                     new ResultCallback<Status>() {
                         @Override
                         public void onResult(Status status) {
@@ -342,15 +364,15 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
      * Disconnects the user and revokes access
      */
     private void disconnect() {
-        if (this.mGoogleApiClient == null) {
+        if (this.mCurrentGoogleApiClient == null) {
             savedCallbackContext.error("Please use login or trySilentLogin before disconnecting");
             return;
         }
 
-        ConnectionResult apiConnect = mGoogleApiClient.blockingConnect();
+        ConnectionResult apiConnect = mCurrentGoogleApiClient.blockingConnect();
 
         if (apiConnect.isSuccess()) {
-            Auth.GoogleSignInApi.revokeAccess(this.mGoogleApiClient).setResultCallback(
+            Auth.GoogleSignInApi.revokeAccess(this.mCurrentGoogleApiClient).setResultCallback(
                     new ResultCallback<Status>() {
                         @Override
                         public void onResult(Status status) {
@@ -420,7 +442,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
      * @param signInResult - the GoogleSignInResult object retrieved in the onActivityResult method.
      */
     private void handleSignInResult(final GoogleSignInResult signInResult) {
-        if (this.mGoogleApiClient == null) {
+        if (this.mCurrentGoogleApiClient == null) {
             savedCallbackContext.error("GoogleApiClient was never initialized");
             return;
         }
@@ -563,13 +585,14 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
 
     private class MakeRequestTask extends AsyncTask<Void, Void, String> {
         private com.google.api.services.gmail.Gmail mService = null;
-        private Map<String, String> urlParams;
+        private Map<String, Object> urlParams;
         private CallbackContext savedCallbackContext;
         private String requestMethod;
         private String jsonObject;
         private String requestUrl;
+        private Exception error = null;
 
-        MakeRequestTask(CallbackContext savedCallbackContext, GoogleAccountCredential credential, Map<String, String> urlParams, String requestMethod, String jsonObject, String requestUrl) {
+        MakeRequestTask(CallbackContext savedCallbackContext, GoogleAccountCredential credential, Map<String, Object> urlParams, String requestMethod, String jsonObject, String requestUrl) {
             this.savedCallbackContext = savedCallbackContext;
             this.requestMethod = requestMethod;
             this.jsonObject = jsonObject;
@@ -604,13 +627,11 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
          */
         private String getDataFromApi() throws IOException {
             try {
-                //hs.put("userId", "me");
-                //Object t1 = new GoogleApiRequest<Object>(mService, "GET", "{userId}/labels", null, Object.class, urlParams).execute();
                 Object t1 = new GoogleApiRequest<Object>(mService, requestMethod, requestUrl, jsonObject, Object.class, urlParams).execute();
                 String t2 = new Gson().toJson(t1);
                 return t2;
             }catch (Exception e) {
-                System.out.println("asdfasdff" + e.toString());
+                error = e;
             }
             return null;
         }
@@ -622,28 +643,11 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
 
         @Override
         protected void onPostExecute(String output) {
-            //Toast.makeText(androidContext, output, Toast.LENGTH_LONG).show();
-            savedCallbackContext.success(output);
-        }
-
-        @Override
-        protected void onCancelled() {
-            /*if (mLastError != null) {
-                if (mLastError instanceof GooglePlayServicesAvailabilityIOException) {
-                    showGooglePlayServicesAvailabilityErrorDialog(
-                            ((GooglePlayServicesAvailabilityIOException) mLastError)
-                                    .getConnectionStatusCode());
-                } else if (mLastError instanceof UserRecoverableAuthIOException) {
-                    startActivityForResult(
-                            ((UserRecoverableAuthIOException) mLastError).getIntent(),
-                            MainActivity.REQUEST_AUTHORIZATION);
-                } else {
-                    mOutputText.setText("The following error occurred:\n"
-                            + mLastError.getMessage());
-                }
+            if (error == null) {
+                savedCallbackContext.success(output);
             } else {
-                mOutputText.setText("Request cancelled.");
-            }*/
+                savedCallbackContext.error(error.getMessage());
+            }
         }
     }
 
@@ -698,7 +702,8 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
                         public void onFailure(Object s, HttpHeaders responseHeaders) throws IOException {
                             String t2 = new Gson().toJson(s);
                             latcher.countDown();
-                            savedCallbackContext.error(t2);
+                            // savedCallbackContext.error(t2);
+                            Log.i("Error", "[GooglePlus:BatchRequestCordova.getDataFromApi.onFailure] " + t2);
                         }
                     });
                 }
@@ -707,7 +712,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
                 latcher.await();
                 return results;
             }catch (Exception e) {
-                System.out.println("asdfasdff" + e.toString());
+                System.out.println("[GooglePlus:BatchRequestCordova.getDataFromApi]" + e.toString());
             }
             return null;
         }
