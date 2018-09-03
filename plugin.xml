@@ -2,7 +2,7 @@
 <plugin xmlns="http://apache.org/cordova/ns/plugins/1.0"
         xmlns:android="http://schemas.android.com/apk/res/android"
         id="cordova-plugin-google-api"
-        version="5.1.2">
+        version="5.1.4">
 
   <name>Google SignIn</name>
 
@@ -31,6 +31,10 @@
 
     <framework src="com.google.android.gms:play-services-auth:10.0.0" />
     <framework src="com.google.android.gms:play-services-identity:10.0.0" />
+    <framework src="com.google.code.gson:gson:2.8.2" />
+    <framework src="com.google.api-client:google-api-client-android:1.23.0" />
+    <framework src="com.google.apis:google-api-services-gmail:v1-rev76-1.23.0" />
+    <framework src="build-extras.gradle" custom="true" type="gradleReference" />
 
     <config-file target="res/xml/config.xml" parent="/*">
       <feature name="GooglePlus">
