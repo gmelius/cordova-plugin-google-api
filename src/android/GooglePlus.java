@@ -217,13 +217,17 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
             @Override
             public void run() {
                 try {
+                    Object body = jsonObject.has("body") ? jsonObject.get("body") : null;
+
                     new MakeRequestTask(
                             savedCallbackContext,
                             mCredential,
                             jsonToMap(jsonObject.getJSONObject("urlParams")),
                             jsonObject.getString("requestMethod"),
-                            jsonObject.has("body") ? jsonObject.getJSONObject("body").toString() : null,
-                            jsonObject.getString("requestUrl")
+                            body != null ? body.toString() : null,
+                            jsonObject.has("headers") ? jsonObject.getJSONObject("headers").toString() : null,
+                            jsonObject.getString("requestUrl"),
+                            jsonObject.has("upload")
                     ).execute();
                 } catch (JSONException e) {
                     e.printStackTrace();
@@ -590,19 +594,31 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
         private String requestMethod;
         private String jsonObject;
         private String requestUrl;
+        private String headers;
         private Exception error = null;
 
-        MakeRequestTask(CallbackContext savedCallbackContext, GoogleAccountCredential credential, Map<String, Object> urlParams, String requestMethod, String jsonObject, String requestUrl) {
+        MakeRequestTask(CallbackContext savedCallbackContext, GoogleAccountCredential credential, Map<String, Object> urlParams, String requestMethod, String jsonObject, String headers, String requestUrl, Boolean isUpload) {
             this.savedCallbackContext = savedCallbackContext;
             this.requestMethod = requestMethod;
             this.jsonObject = jsonObject;
             this.requestUrl = requestUrl;
+            this.headers = headers;
+
             HttpTransport transport = AndroidHttp.newCompatibleTransport();
             JsonFactory jsonFactory = JacksonFactory.getDefaultInstance();
-            mService = new com.google.api.services.gmail.Gmail.Builder(
+
+            String rootUrl = "https://content.googleapis.com/";
+
+            if (isUpload) {
+                rootUrl += "upload/";
+            }
+
+            com.google.api.services.gmail.Gmail.Builder builder = new com.google.api.services.gmail.Gmail.Builder(
                     transport, jsonFactory, credential)
                     .setApplicationName("Gmail API Usage")
-                    .build();
+                    .setRootUrl(rootUrl);
+
+            mService = builder.build();
             this.urlParams = urlParams;
         }
 
@@ -627,7 +643,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
          */
         private String getDataFromApi() throws IOException {
             try {
-                Object t1 = new GoogleApiRequest<Object>(mService, requestMethod, requestUrl, jsonObject, Object.class, urlParams).execute();
+                Object t1 = new GoogleApiRequest<Object>(mService, requestMethod, requestUrl, jsonObject, headers, Object.class, urlParams).execute();
                 String t2 = new Gson().toJson(t1);
                 return t2;
             }catch (Exception e) {
@@ -666,7 +682,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
                     .build();
             requests = new ArrayList<GoogleApiRequest<Object>>();
             for (BatchRequestPojo request: requestsPojo) {
-                this.requests.add(new GoogleApiRequest<Object>(mService, request.getRequestMethod(), request.getRequestUrl(), request.getJsonObject(), Object.class, request.getUrlParams()));
+                this.requests.add(new GoogleApiRequest<Object>(mService, request.getRequestMethod(), request.getRequestUrl(), request.getJsonObject(), null, Object.class, request.getUrlParams()));
             }
         }
 

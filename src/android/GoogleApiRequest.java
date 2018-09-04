@@ -26,6 +26,8 @@ package nl.xservices.plugins;
  * the License.
  */
 
+import android.util.Log;
+
 import com.google.api.client.googleapis.MethodOverride;
 import com.google.api.client.googleapis.batch.BatchCallback;
 import com.google.api.client.googleapis.batch.BatchRequest;
@@ -46,16 +48,21 @@ import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.http.HttpResponse;
 import com.google.api.client.http.HttpResponseException;
 import com.google.api.client.http.HttpResponseInterceptor;
+import com.google.api.client.http.InputStreamContent;
 import com.google.api.client.http.UriTemplate;
-import com.google.api.client.http.json.JsonHttpContent;
-import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.GenericData;
 import com.google.api.client.util.Preconditions;
+import com.google.gson.Gson;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Iterator;
 import java.util.Map;
+
 
 /**
  * Abstract Google client request for a {@link AbstractGoogleClient}.
@@ -128,7 +135,7 @@ public class GoogleApiRequest<T> extends GenericData {
      * @param responseClass response class to parse into
      */
     public GoogleApiRequest(AbstractGoogleJsonClient abstractGoogleClient,
-                            String requestMethod, String uriTemplate, String jsonContent, Class<T> responseClass, Map<String, Object> uriParams) {
+                            String requestMethod, String uriTemplate, String jsonContent, String headers, Class<T> responseClass, Map<String, Object> uriParams) {
         this.responseClass = Preconditions.checkNotNull(responseClass);
         this.abstractGoogleClient = Preconditions.checkNotNull(abstractGoogleClient);
         this.requestMethod = Preconditions.checkNotNull(requestMethod);
@@ -137,6 +144,23 @@ public class GoogleApiRequest<T> extends GenericData {
         this.uriParams = uriParams;
         // application name
         String applicationName = abstractGoogleClient.getApplicationName();
+
+        if (headers != null) {
+            try {
+                JSONObject headersObj = new JSONObject(headers);
+
+                Iterator<?> keys = headersObj.keys();
+
+                while( keys.hasNext() ) {
+                    String key = (String)keys.next();
+                    requestHeaders.put(key, headersObj.get(key));
+                }
+            } catch (JSONException ex) {
+                Log.d("[GoogleApiRequest]", ex.getMessage());
+            }
+        }
+
+
         if (applicationName != null) {
             requestHeaders.setUserAgent(applicationName + " " + USER_AGENT_SUFFIX);
         } else {
@@ -488,8 +512,16 @@ public class GoogleApiRequest<T> extends GenericData {
      *
      * @return parsed HTTP response
      */
-    public T execute() throws IOException {
-        return executeUnparsed().parseAs(responseClass);
+    public T execute() throws IOException, JSONException {
+        HttpResponse httpResponse = executeUnparsed();
+        HttpHeaders httpHeaders = httpResponse.getHeaders();
+        String loaderId = httpHeaders.getFirstHeaderStringValue("x-guploader-uploadid");
+
+        if (loaderId != null) {
+            return (T) new JSONObject().put("loaderId", loaderId);
+        }
+
+        return httpResponse.parseAs(responseClass);
     }
 
     /**
