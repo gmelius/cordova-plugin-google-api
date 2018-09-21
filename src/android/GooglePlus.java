@@ -66,6 +66,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConnectionFailedListener {
     private Context androidContext;
+    private Activity androidActivity;
 
     private String loadingText = "Loading...";
 
@@ -104,6 +105,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
     public void initialize(CordovaInterface cordova, CordovaWebView webView) {
         super.initialize(cordova, webView);
         androidContext = webView.getContext();
+        androidActivity = cordova.getActivity();
     }
 
     @Override
@@ -301,7 +303,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
         //Now that we have our options, let's build our Client
         Log.i(TAG, "Building GoogleApiClient");
 
-        GoogleApiClient.Builder builder = new GoogleApiClient.Builder(webView.getContext())
+        GoogleApiClient.Builder builder = new GoogleApiClient.Builder(androidContext)
                 .addOnConnectionFailedListener(this)
                 .addApi(Auth.GOOGLE_SIGN_IN_API, gso.build());
 
@@ -470,9 +472,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
                     GoogleSignInAccount acct = signInResult.getSignInAccount();
                     JSONObject result = new JSONObject();
                     try {
-                        JSONObject accessTokenBundle = getAuthToken(
-                                cordova.getActivity(), acct.getAccount(), true
-                        );
+                        JSONObject accessTokenBundle = getAuthToken(androidContext, androidActivity, acct.getAccount(), true);
                         result.put(FIELD_ACCESS_TOKEN, accessTokenBundle.get(FIELD_ACCESS_TOKEN));
                         result.put(FIELD_TOKEN_EXPIRES, accessTokenBundle.get(FIELD_TOKEN_EXPIRES));
                         result.put(FIELD_TOKEN_EXPIRES_IN, accessTokenBundle.get(FIELD_TOKEN_EXPIRES_IN));
@@ -529,8 +529,8 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
         }
     }
 
-    private JSONObject getAuthToken(Activity activity, Account account, boolean retry) throws Exception {
-        AccountManager manager = AccountManager.get(activity);
+    private JSONObject getAuthToken(Context context, Activity activity, Account account, boolean retry) throws Exception {
+        AccountManager manager = AccountManager.get(context);
         AccountManagerFuture<Bundle> future = manager.getAuthToken(account, "oauth2:profile email", null, activity, null, null);
         Bundle bundle = future.getResult();
         String authToken = bundle.getString(AccountManager.KEY_AUTHTOKEN);
@@ -539,7 +539,7 @@ public class GooglePlus extends CordovaPlugin implements GoogleApiClient.OnConne
         } catch (IOException e) {
             if (retry) {
                 manager.invalidateAuthToken("com.google", authToken);
-                return getAuthToken(activity, account, false);
+                return getAuthToken(context, activity, account, false);
             } else {
                 throw e;
             }
