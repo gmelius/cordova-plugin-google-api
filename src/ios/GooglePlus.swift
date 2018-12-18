@@ -1,50 +1,132 @@
 import GoogleSignIn
 
 @objc(GooglePlus)
-class GooglePlus: CDVPlugin {
+class GooglePlus: CDVPlugin, UIApplicationDelegate, GIDSignInDelegate {
     var commandCallback: String?
+    
+    
+    /**** SignIn SDK ****/
+    
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplicationLaunchOptionsKey: Any]?) -> Bool {
+        // Initialize sign-in
+        GIDSignIn.sharedInstance().delegate = self
+        
+        return true
+    }
+    
+    func application(_ app: UIApplication, open url: URL, options: [UIApplicationOpenURLOptionsKey : Any] = [:]) -> Bool {
+        return GIDSignIn.sharedInstance().handle(url as URL?,
+                                                 sourceApplication: options[UIApplicationOpenURLOptionsKey.sourceApplication] as? String,
+                                                 annotation: options[UIApplicationOpenURLOptionsKey.annotation])
+    }
+    
+    /*
+    func application(application: UIApplication,
+                     openURL url: URL, sourceApplication: String?, annotation: Any?) -> Bool {
+        var options: [String: AnyObject] = [UIApplicationOpenURLOptionsSourceApplicationKey: sourceApplication,
+                                            UIApplicationOpenURLOptionsAnnotationKey: annotation]
+        return GIDSignIn.sharedInstance().handleURL(url,
+                                                    sourceApplication: sourceApplication,
+                                                    annotation: annotation)
+    }
+    */
+    
+    func sign(_ signIn: GIDSignIn!, didSignInFor user: GIDGoogleUser!,
+              withError error: Error!) {
+        if let error = error {
+            print("\(error.localizedDescription)")
+        } else {
+            // Perform any operations on signed in user here.
+            let userId = user.userID                  // For client-side use only!
+            let idToken = user.authentication.idToken // Safe to send to the server
+            let fullName = user.profile.name
+            let givenName = user.profile.givenName
+            let familyName = user.profile.familyName
+            let email = user.profile.email
+            do {
+                
+                if let message = try String(
+                    data: JSONSerialization.data(
+                        withJSONObject: [
+                            "email": email
+                        ],
+                        options: []
+                    ),
+                    encoding: String.Encoding.utf8
+                    ) {
+                    self.send(message)
+                }
+                else {
+                    self.sendError("Serializing result failed.")
+                }
+                
+            } catch let error {
+                self.sendError(error.localizedDescription)
+            }
+            
+            
+        }
+    }
+    
+    func sign(_ signIn: GIDSignIn!, didDisconnectWith user: GIDGoogleUser!,
+              withError error: Error!) {
+        self.sendError("Something is wrong !")
+    }
+    
+    /**** END ****/
+    
+    
+    
     
     @objc(login:)
     func login (command: CDVInvokedUrlCommand) {
-        self.commandCallback = command.callbackId
-        let options: [String: Any] = command.arguments.first as! [String: Any]
-        print(options)
-
-        let reversedClientId: String! = self.getReversedClientId()
-        if (reversedClientId == nil) {
-            self.sendError("Could not find REVERSED_CLIENT_ID url scheme in app .plist")
-            return
-        }
-
-        /* let scopesStrinf: String = options["scopes"] as! String
-         let serverClientId: String = options["webClientId"] as! String
-         let offline: BOOL = options["offline"] as! BOOL
-         // Initialize sign-in
-         GIDSignIn.sharedInstance().handle(
+        self.getGIDSignInObject(command).signIn()
+        
+        /* GIDSignIn.sharedInstance().handle(
          URL(options["url"] as! String),
          sourceApplication: options[UIApplicationOpenURLOptionsKey.sourceApplication] as? String,
          annotation: options[UIApplicationOpenURLOptionsKey.annotation]
-         ) */
-
-        do {
-            if let message = try String(
-                data: JSONSerialization.data(
-                    withJSONObject: [
-                        "test": "Hello World !!",
-                        "options": options
-                    ],
-                    options: []
-                ),
-                encoding: String.Encoding.utf8
-                ) {
-                self.send(message)
-            }
-            else {
-                self.sendError("Serializing result failed.")
-            }
-        } catch let error {
-            self.sendError(error.localizedDescription)
+         )*/
+        
+    }
+    
+    func getGIDSignInObject (_ command: CDVInvokedUrlCommand) -> GIDSignIn! {
+        self.commandCallback = command.callbackId
+        
+        let options: [String: Any] = command.arguments.first as! [String: Any]
+        print(options)
+        
+        let reversedClientId: String! = self.getReversedClientId()
+        
+        if (reversedClientId == nil) {
+            self.sendError("Could not find REVERSED_CLIENT_ID url scheme in app .plist")
+            return nil
         }
+        
+        let scopesString: String = options["scopes"] as! String
+        let serverClientId: String = options["webClientId"] as! String
+        let offline: Bool = options["offline"] as! Bool
+        
+        // Initialize sign-in
+        let signInObj: GIDSignIn = GIDSignIn.sharedInstance()
+        signInObj.clientID = self.reverseUrlScheme(reversedClientId)
+        
+        if (offline) {
+            signInObj.serverClientID = serverClientId
+        }
+        
+        signInObj.scopes = scopesString.split(separator: ".").map(String.init)
+        
+        return signInObj
+    }
+    
+    func reverseUrlScheme (_ reversedClientId: String) -> String {
+        var originalArray: Array = reversedClientId.split(separator: ".").map(String.init)
+        originalArray.reverse()
+        let reversedString: String = originalArray.joined(separator: ".")
+        
+        return reversedString
     }
     // Get the REVERSED_CLIENT_ID
     func getReversedClientId () -> String! {
