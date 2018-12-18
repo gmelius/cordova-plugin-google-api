@@ -1,20 +1,12 @@
 import GoogleSignIn
 
 @objc(GooglePlus)
-class GooglePlus: CDVPlugin, UIApplicationDelegate, GIDSignInDelegate {
+class GooglePlus: CDVPlugin, GIDSignInDelegate {
     var commandCallback: String?
     
     
     /**** SignIn SDK ****/
-    
-    func application(_ application: UIApplication,
-                     didFinishLaunchingWithOptions launchOptions: [UIApplicationLaunchOptionsKey: Any]?) -> Bool {
-        // Initialize sign-in
-        GIDSignIn.sharedInstance().delegate = self
         
-        return true
-    }
-    
     func application(_ app: UIApplication, open url: URL, options: [UIApplicationOpenURLOptionsKey : Any] = [:]) -> Bool {
         return GIDSignIn.sharedInstance().handle(url as URL?,
                                                  sourceApplication: options[UIApplicationOpenURLOptionsKey.sourceApplication] as? String,
@@ -93,7 +85,7 @@ class GooglePlus: CDVPlugin, UIApplicationDelegate, GIDSignInDelegate {
     
     func getGIDSignInObject (_ command: CDVInvokedUrlCommand) -> GIDSignIn! {
         self.commandCallback = command.callbackId
-        
+
         let options: [String: Any] = command.arguments.first as! [String: Any]
         print(options)
         
@@ -111,6 +103,7 @@ class GooglePlus: CDVPlugin, UIApplicationDelegate, GIDSignInDelegate {
         // Initialize sign-in
         let signInObj: GIDSignIn = GIDSignIn.sharedInstance()
         signInObj.clientID = self.reverseUrlScheme(reversedClientId)
+        signInObj.delegate = self
         
         if (offline) {
             signInObj.serverClientID = serverClientId
