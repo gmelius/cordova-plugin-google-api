@@ -69,6 +69,9 @@
     <header-file src="src/ios/GooglePlus.h"/>
     <source-file src="src/ios/GooglePlus.m"/>
 
+		<source-file src="src/ios/GooglePlus.swift" />
+		<dependency id="cordova-plugin-add-swift-support" version="*" />
+
     <preference name="REVERSED_CLIENT_ID" />
 
     <config-file target="*-Info.plist" parent="CFBundleURLTypes">
