@@ -31,14 +31,17 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate {
         } else {
             print(user)
             do {
+                let hasImage: Bool = user.profile.hasImage
+                
                 if let message = try String(
                     data: JSONSerialization.data(
                         withJSONObject: [
                           "idToken": user.authentication.idToken,
                           "fullName": user.profile.name,
                           "givenName": user.profile.givenName,
-                          "familyName": user,.profile.familyName,
-                          "email": user.profile.email
+                          "familyName": user.profile.familyName,
+                          "email": user.profile.email,
+                          "imageUrl": hasImage ? user.profile.imageURLWithDimension(60) : nil
                         ],
                         options: []
                     ),
