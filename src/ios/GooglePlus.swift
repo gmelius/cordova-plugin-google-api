@@ -7,13 +7,14 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate {
     
     /**** SignIn SDK ****/
         
+    /*
     func application(_ app: UIApplication, open url: URL, options: [UIApplicationOpenURLOptionsKey : Any] = [:]) -> Bool {
         return GIDSignIn.sharedInstance().handle(url as URL?,
                                                  sourceApplication: options[UIApplicationOpenURLOptionsKey.sourceApplication] as? String,
                                                  annotation: options[UIApplicationOpenURLOptionsKey.annotation])
     }
     
-    /*
+    
     func application(application: UIApplication,
                      openURL url: URL, sourceApplication: String?, annotation: Any?) -> Bool {
         var options: [String: AnyObject] = [UIApplicationOpenURLOptionsSourceApplicationKey: sourceApplication,
@@ -40,8 +41,8 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate {
                           "fullName": user.profile.name,
                           "givenName": user.profile.givenName,
                           "familyName": user.profile.familyName,
-                          "email": user.profile.email,
-                          "imageUrl": hasImage ? user.profile.imageURLWithDimension(60) : nil
+                          "email": user.profile.email/* ,
+                          "imageUrl": hasImage ? user.profile.imageURLWithDimension(60) : nil */
                         ],
                         options: []
                     ),
