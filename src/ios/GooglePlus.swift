@@ -41,8 +41,8 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate {
                           "fullName": user.profile.name,
                           "givenName": user.profile.givenName,
                           "familyName": user.profile.familyName,
-                          "email": user.profile.email/* ,
-                          "imageUrl": hasImage ? user.profile.imageURLWithDimension(60) : nil */
+                          "email": user.profile.email,
+                          "imageUrl": hasImage ? user.profile.image(URLWithDimension: 60) : ""
                         ],
                         options: []
                     ),
@@ -75,13 +75,17 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate {
     @objc(login:)
     func login (command: CDVInvokedUrlCommand) {
         self.getGIDSignInObject(command).signIn()
-        
-        /* GIDSignIn.sharedInstance().handle(
-         URL(options["url"] as! String),
-         sourceApplication: options[UIApplicationOpenURLOptionsKey.sourceApplication] as? String,
-         annotation: options[UIApplicationOpenURLOptionsKey.annotation]
-         )*/
-        
+    }
+    
+    @objc(trySilentLogin:)
+    func trySilentLogin (command: CDVInvokedUrlCommand) {
+        self.getGIDSignInObject(command).signInSilently()
+    }
+
+    @objc(logout:)
+    func logout (command: CDVInvokedUrlCommand) {
+        GIDSignIn.sharedInstance().signOut()
+        self.send("Logged out")
     }
     
     func getGIDSignInObject (_ command: CDVInvokedUrlCommand) -> GIDSignIn! {
@@ -122,6 +126,7 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate {
         
         return reversedString
     }
+
     // Get the REVERSED_CLIENT_ID
     func getReversedClientId () -> String! {
         if let urlTypes: [Any] = Bundle.main.infoDictionary!["CFBundleURLTypes"] as? [Any] {
