@@ -90,7 +90,7 @@
     </config-file>
 
     <!-- Google frameworks -->
-    <framework src="GoogleSignIn" type="podspec" spec="~> 4.4.1" />
+    <framework src="GoogleSignIn" type="podspec" spec="~> 4.1.1" />
 
 		<hook type="after_plugin_install" src="hooks/ios/prerequisites.js"/>
 		<hook type="after_plugin_install" src="hooks/ios/install_entitlements.js" />
