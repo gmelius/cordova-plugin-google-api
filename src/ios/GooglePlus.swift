@@ -29,19 +29,16 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate {
         if let error = error {
             print("\(error.localizedDescription)")
         } else {
-            // Perform any operations on signed in user here.
-            let userId = user.userID                  // For client-side use only!
-            let idToken = user.authentication.idToken // Safe to send to the server
-            let fullName = user.profile.name
-            let givenName = user.profile.givenName
-            let familyName = user.profile.familyName
-            let email = user.profile.email
+            print(user)
             do {
-                
                 if let message = try String(
                     data: JSONSerialization.data(
                         withJSONObject: [
-                            "email": email
+                          "idToken": user.authentication.idToken,
+                          "fullName": user.profile.name,
+                          "givenName": user.profile.givenName,
+                          "familyName": user,.profile.familyName,
+                          "email": user.profile.email
                         ],
                         options: []
                     ),
