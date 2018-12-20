@@ -1,3 +1,4 @@
+/*
 console.log("START Running hook to add iOS Keychain Sharing entitlements (required since iOS 10)");
 
 var xcode = require('xcode'),
@@ -95,3 +96,4 @@ module.exports = function (context) {
 
   return deferral.promise;
 };
+*/

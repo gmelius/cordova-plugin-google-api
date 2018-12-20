@@ -1,3 +1,4 @@
+/*
 console.error("Google Sign-In prerequisites");
 
 module.exports = function (context) {
@@ -15,3 +16,5 @@ module.exports = function (context) {
 
   return deferral.promise;
 };
+
+*/
