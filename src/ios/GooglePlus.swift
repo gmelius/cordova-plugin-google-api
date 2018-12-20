@@ -1,75 +1,51 @@
+import UIKit
 import GoogleSignIn
 
 @objc(GooglePlus)
-class GooglePlus: CDVPlugin, GIDSignInDelegate {
+class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
     var commandCallback: String?
     
-    
     /**** SignIn SDK ****/
-        
-    /*
-    func application(_ app: UIApplication, open url: URL, options: [UIApplicationOpenURLOptionsKey : Any] = [:]) -> Bool {
-        return GIDSignIn.sharedInstance().handle(url as URL?,
-                                                 sourceApplication: options[UIApplicationOpenURLOptionsKey.sourceApplication] as? String,
-                                                 annotation: options[UIApplicationOpenURLOptionsKey.annotation])
+    @objc(signIn:dismissViewController:)
+    func sign(_ signIn: GIDSignIn!, dismiss viewController: UIViewController!) {
+        self.viewController.dismiss(animated: true, completion: nil)
     }
     
-    
-    func application(application: UIApplication,
-                     openURL url: URL, sourceApplication: String?, annotation: Any?) -> Bool {
-        var options: [String: AnyObject] = [UIApplicationOpenURLOptionsSourceApplicationKey: sourceApplication,
-                                            UIApplicationOpenURLOptionsAnnotationKey: annotation]
-        return GIDSignIn.sharedInstance().handleURL(url,
-                                                    sourceApplication: sourceApplication,
-                                                    annotation: annotation)
+    @objc(signIn:presentViewController:)
+    func sign(_ signIn: GIDSignIn!, present viewController: UIViewController!) {
+        self.viewController.present(viewController, animated: true, completion: nil)
     }
-    */
+    
+   
+    func sign(_ signIn: GIDSignIn!, didDisconnectWith user: GIDGoogleUser!,
+              withError error: Error!) {
+        self.sendError("User disconected")
+    }
+    
     
     func sign(_ signIn: GIDSignIn!, didSignInFor user: GIDGoogleUser!,
               withError error: Error!) {
         if let error = error {
-            print("\(error.localizedDescription)")
+            self.sendError("\(error.localizedDescription)")
         } else {
-            print(user)
-            do {
-                let hasImage: Bool = user.profile.hasImage
-                
-                if let message = try String(
-                    data: JSONSerialization.data(
-                        withJSONObject: [
-                          "idToken": user.authentication.idToken,
-                          "fullName": user.profile.name,
-                          "givenName": user.profile.givenName,
-                          "familyName": user.profile.familyName,
-                          "email": user.profile.email,
-                          "imageUrl": hasImage ? user.profile.image(URLWithDimension: 60) : ""
-                        ],
-                        options: []
-                    ),
-                    encoding: String.Encoding.utf8
-                    ) {
-                    self.send(message)
-                }
-                else {
-                    self.sendError("Serializing result failed.")
-                }
-                
-            } catch let error {
-                self.sendError(error.localizedDescription)
+            var message: Dictionary<String, Any> = [
+                "expires": user.authentication.accessTokenExpirationDate.timeIntervalSince1970,
+                "serverAuthCode": user.serverAuthCode,
+                "displayName": user.profile.name,
+                "givenName": user.profile.givenName,
+                "familyName": user.profile.familyName,
+                "email": user.profile.email
+            ]
+            
+            // If have, add the user profile picture to the result.
+            if (user.profile.hasImage) {
+                message["imageUrl"] = user.profile.imageURL(withDimension: 120)?.absoluteString
             }
             
-            
+            self.send(message)
         }
     }
-    
-    func sign(_ signIn: GIDSignIn!, didDisconnectWith user: GIDGoogleUser!,
-              withError error: Error!) {
-        self.sendError("Something is wrong !")
-    }
-    
     /**** END ****/
-    
-    
     
     
     @objc(login:)
@@ -81,40 +57,56 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate {
     func trySilentLogin (command: CDVInvokedUrlCommand) {
         self.getGIDSignInObject(command).signInSilently()
     }
-
+    
     @objc(logout:)
     func logout (command: CDVInvokedUrlCommand) {
         GIDSignIn.sharedInstance().signOut()
-        self.send("Logged out")
+        self.sendString("Logged out")
+    }
+    
+    @objc(disconnect:)
+    func disconnect (command: CDVInvokedUrlCommand) {
+        GIDSignIn.sharedInstance().disconnect()
+        self.sendString("Disconnected")
     }
     
     func getGIDSignInObject (_ command: CDVInvokedUrlCommand) -> GIDSignIn! {
         self.commandCallback = command.callbackId
-
+        
         let options: [String: Any] = command.arguments.first as! [String: Any]
-        print(options)
         
         let reversedClientId: String! = self.getReversedClientId()
-        
         if (reversedClientId == nil) {
             self.sendError("Could not find REVERSED_CLIENT_ID url scheme in app .plist")
             return nil
         }
         
-        let scopesString: String = options["scopes"] as! String
-        let serverClientId: String = options["webClientId"] as! String
+        let scopesString: String! = options["scopes"] as? String
+        let serverClientId: String! = options["webClientId"] as? String
         let offline: Bool = options["offline"] as! Bool
+        let accountName: String! = options["accountName"] as? String
         
         // Initialize sign-in
-        let signInObj: GIDSignIn = GIDSignIn.sharedInstance()
-        signInObj.clientID = self.reverseUrlScheme(reversedClientId)
-        signInObj.delegate = self
+        let signInObj: GIDSignIn = GIDSignIn()
+        signInObj.signOut()
         
-        if (offline) {
+        signInObj.delegate = self
+        signInObj.uiDelegate = self
+        
+        signInObj.clientID = self.reverseUrlScheme(reversedClientId)
+        
+        // If webClientId is include and offline is true, set serverClientId for received serverAuthCode.
+        if (serverClientId != nil && offline) {
             signInObj.serverClientID = serverClientId
         }
         
-        signInObj.scopes = scopesString.split(separator: ".").map(String.init)
+        if (scopesString != nil && !scopesString.isEmpty) {
+            signInObj.scopes = scopesString.split(separator: " ").map(String.init)
+        }
+        
+        if (accountName != nil) {
+            signInObj.loginHint = accountName
+        }
         
         return signInObj
     }
@@ -126,7 +118,7 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate {
         
         return reversedString
     }
-
+    
     // Get the REVERSED_CLIENT_ID
     func getReversedClientId () -> String! {
         if let urlTypes: [Any] = Bundle.main.infoDictionary!["CFBundleURLTypes"] as? [Any] {
@@ -144,7 +136,7 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate {
     }
     
     // Send result
-    func send (_ message: String, _ status: CDVCommandStatus = CDVCommandStatus_OK) {
+    func send (_ message: Dictionary<String, Any>, _ status: CDVCommandStatus = CDVCommandStatus_OK) {
         if let callbackId = self.commandCallback {
             self.commandCallback = nil
             let pluginResult = CDVPluginResult(
@@ -157,8 +149,24 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate {
             )
         }
     }
+    
+    func sendString (_ message: String, _ status: CDVCommandStatus = CDVCommandStatus_OK) {
+        if let callbackId = self.commandCallback {
+            self.commandCallback = nil
+            let pluginResult = CDVPluginResult(
+                status: status,
+                messageAs: message
+            )
+            self.commandDelegate!.send(
+                pluginResult,
+                callbackId: callbackId
+            )
+        }
+    }
+    
     // Send error
     func sendError (_ message: String) {
-        self.send(message, CDVCommandStatus_ERROR)
+        self.sendString(message, CDVCommandStatus_ERROR)
     }
 }
+
