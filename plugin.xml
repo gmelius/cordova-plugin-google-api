@@ -90,8 +90,8 @@
     </config-file>
 
     <!-- Google frameworks -->
-    <framework src="GoogleSignIn" type="podspec" spec="~> 4.4.0" />
-    <framework src="GoogleAPIClientForREST" type="podspec" spec="~> 1.3.7" />
+    <framework src="GoogleSignIn" type="podspec:use_frameworks" spec="~> 4.4.0" />
+    <framework src="GoogleAPIClientForREST" type="podspec:use_frameworks" spec="~> 1.3.7" />
 
 		<!--<hook type="after_plugin_install" src="hooks/ios/prerequisites.js"/>
 		<hook type="after_plugin_install" src="hooks/ios/install_entitlements.js" />-->
