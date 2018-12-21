@@ -19,7 +19,11 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
    
     func sign(_ signIn: GIDSignIn!, didDisconnectWith user: GIDGoogleUser!,
               withError error: Error!) {
-        self.sendError("User disconected")
+        if let error = error {
+            self.sendError("\(error.localizedDescription)")
+        } else {
+           self.sendError("User disconnected !")
+        }
     }
     
     
@@ -169,4 +173,3 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
         self.sendString(message, CDVCommandStatus_ERROR)
     }
 }
-
