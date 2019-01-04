@@ -6,7 +6,7 @@ import GTMSessionFetcher
 @objc(GooglePlus)
 class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
     var commandCallback: String?
-    var currentGoogleUser: GIDGoogleUser?
+    var authorizer: GTMFetcherAuthorizationProtocol?
     
     /**** SignIn SDK ****/
     @objc(signIn:dismissViewController:)
@@ -19,13 +19,13 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
         self.viewController.present(viewController, animated: true, completion: nil)
     }
     
-   
+    
     func sign(_ signIn: GIDSignIn!, didDisconnectWith user: GIDGoogleUser!,
               withError error: Error!) {
         if let error = error {
             self.sendError("\(error.localizedDescription)")
         } else {
-           self.sendError("User disconnected !")
+            self.sendError("User disconnected !")
         }
     }
     
@@ -35,9 +35,8 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
         if let error = error {
             self.sendError("\(error.localizedDescription)")
         } else {
-            self.currentGoogleUser = user
-            print(user.userID)
-            print(user.authentication.accessToken)
+            // Save the authorizer for calls to Google API.
+            self.authorizer = user.authentication.fetcherAuthorizer()
             
             var message: Dictionary<String, Any> = [
                 "expires": user.authentication.accessTokenExpirationDate.timeIntervalSince1970,
@@ -83,10 +82,6 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
     
     func getGIDSignInObject (_ command: CDVInvokedUrlCommand) -> GIDSignIn! {
         self.commandCallback = command.callbackId
-        
-        if (self.currentGoogleUser != nil) {
-            self.currentGoogleUser = nil
-        }
         
         let options: [String: Any] = command.arguments.first as! [String: Any]
         
@@ -154,70 +149,57 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
     
     @objc(callGoogleApi:)
     func callGoogleApi (command: CDVInvokedUrlCommand) {
-        print("2222222222222222222222222222222")
+        self.commandCallback = command.callbackId
+        
+        // Enabled GTMFetcher logs.
+        GTMSessionFetcher.setLoggingEnabled(true)
         
         let options: [String: Any] = command.arguments.first as! [String: Any]
-        print(options)
-        
-        
-        var rootUrl: String = "https://content.googleapis.com/"
         let urlParams = options["urlParams"] as! NSMutableDictionary
         let requestMethod = options["requestMethod"] as! String
-        let headers = options["headers"]
         let requestUrl = options["requestUrl"] as! String
-        let upload: Bool! = options["upload"] as? Bool
-        
-        print(urlParams)
-        print(requestMethod)
-        print(headers)
-        print(requestUrl)
-        print(upload)
-        
-        // If the call is an upload (needed for resumable call)
-        if (upload != nil && upload) {
-            rootUrl += "upload/gmail/v1/"
-        } else{
-            rootUrl += "gmail/v1/"
-        }
-        
-        
-        
+        // let upload: Bool! = options["upload"] as? Bool
+
         let query: GTLRQuery = GTLRQuery.init(pathURITemplate: requestUrl, httpMethod: requestMethod, pathParameterNames: ["userId"])
         
         query.json = urlParams
         
-        
-        
         // Set body if passed
         if let body = options["body"] {
             query.bodyObject = GTLRObject.init(json: body as? [AnyHashable: Any])
-            print(body)
         }
         
-        let uploadParams: GTLRUploadParameters = GTLRUploadParameters.init()
-        uploadParams.useBackgroundSession = true
-        
-        query.uploadParameters = uploadParams
-        
+        /*
+         let uploadParams: GTLRUploadParameters = GTLRUploadParameters.init()
+         uploadParams.useBackgroundSession = true
+         // If the call is an upload (needed for resumable call)
+         uploadParams.shouldUploadWithSingleRequest = (upload != nil && upload) ? false : true
+         
+         query.uploadParameters = uploadParams
+         */
         
         let service = GTLRService.init()
-        service.apiKey = "dsf"
         
-        // set the authorizer for the current connected user.
-        service.authorizer = self.currentGoogleUser?.authentication.fetcherAuthorizer()
+        if let headers = options["headers"] as? [String : String]{
+            service.additionalHTTPHeaders = headers
+        }
         
-        service.rootURLString = rootUrl
+        service.rootURLString = "https://content.googleapis.com/"
+        service.servicePath = "gmail/v1/users/"
+        // service.simpleUploadPath = "upload/"
         
+        // Set the authorizer for the current connected user.
+        service.authorizer = self.authorizer
         
-        print("qqqqqqqqqqq")
-        service.executeQuery(query, completionHandler: {
-            (ticket: GTLRServiceTicket, object: AnyObject, error: NSError) -> Void in
-            print("33333333333333333")
-            print(ticket)
-            print(object)
-            print(error)
-        } as? GTLRServiceCompletionHandler)
-        
+        service.executeQuery(query, completionHandler: {(ticket, object, error: Error!) -> Void in
+            if let error = error {
+                self.sendError("\(error.localizedDescription)")
+            } else {
+                if let result = object as? GTLRObject{
+                    self.sendString(result.jsonString())
+                }
+            }
+        })
     }
     
     /**** End ****/
