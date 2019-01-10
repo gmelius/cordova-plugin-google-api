@@ -165,11 +165,19 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
             if let error = error {
                 self.sendError("\(error.localizedDescription)", command.callbackId)
             } else {
+                if query.uploadParameters != nil {
+                    if let loaderId = ticket.objectFetcher?.responseHeaders!["x-guploader-uploadid"] {
+                        self.sendString(self.arrayToJsonString(["loaderId": loaderId])!, command.callbackId)
+                        return
+                    }
+                }
+                
                 if let result = object as? GTLRObject {
                     self.sendString(result.jsonString(), command.callbackId)
                 } else {
                     self.sendError("The object returned need to be an GTLRObject !", command.callbackId)
                 }
+                return
             }
         })
     }
@@ -217,7 +225,6 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
         let urlParams = options["urlParams"] as! NSMutableDictionary
         let requestMethod = options["requestMethod"] as! String
         let requestUrl = options["requestUrl"] as! String
-        // let upload: Bool! = options["upload"] as? Bool
         
         let query: GTLRQuery = GTLRQuery.init(pathURITemplate: requestUrl, httpMethod: requestMethod, pathParameterNames: ["userId"])
         
@@ -225,17 +232,22 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
         
         // Set body if passed
         if let body = options["body"] {
-            query.bodyObject = GTLRObject.init(json: body as? [AnyHashable: Any])
+            // If the call is an upload set GTLRUploqdParameters.
+            if let upload = options["upload"] as? Bool {
+                if (upload == true) {
+                    if let dataString = body as? String {
+                        query.uploadParameters = GTLRUploadParameters.init(data: dataString.data(using: .utf8)!, mimeType: "message/rfc822")
+                    } else {
+                        let dataString: String = self.arrayToJsonString(body)!
+                        
+                        query.uploadParameters = GTLRUploadParameters.init(data: dataString.data(using: .utf8)!, mimeType: "message/rfc822")
+                    }
+                }
+            } else {
+                // Else build the body Object.
+                query.bodyObject = GTLRObject.init(json: body as? [AnyHashable: Any])
+            }
         }
-        
-        /*
-         let uploadParams: GTLRUploadParameters = GTLRUploadParameters.init()
-         uploadParams.useBackgroundSession = true
-         // If the call is an upload (needed for resumable call)
-         uploadParams.shouldUploadWithSingleRequest = (upload != nil && upload) ? false : true
-         
-         query.uploadParameters = uploadParams
-         */
         
         return query
     }
@@ -243,16 +255,16 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
     func buildService (_ options: [String: Any]!) -> GTLRService {
         let service = GTLRService.init()
         
+        service.rootURLString = "https://content.googleapis.com/"
+        service.servicePath = "gmail/v1/users/"
+        service.batchPath = "batch/gmail/v1"
+        service.resumableUploadPath = "upload/"
+        
         if (options != nil) {
             if let headers = options["headers"] as? [String : String]{
                 service.additionalHTTPHeaders = headers
             }
         }
-        
-        service.rootURLString = "https://content.googleapis.com/"
-        service.servicePath = "gmail/v1/users/"
-        service.batchPath = "batch/gmail/v1"
-        // service.simpleUploadPath = "upload/"
         
         // Set the authorizer for the current connected user.
         service.authorizer = self.authorizer
@@ -289,7 +301,7 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
     
     func sendString (_ message: String, _ commandCallback: String? = nil, _ status: CDVCommandStatus = CDVCommandStatus_OK) {
         let callbackId = commandCallback != nil ? commandCallback : self.commandCallback
-        print(message)
+
         if callbackId != nil {
             self.commandCallback = nil
             let pluginResult = CDVPluginResult(
@@ -305,7 +317,6 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
     
     // Send error
     func sendError (_ message: String, _ commandCallback: String? = nil) {
-        
         self.sendString(message, commandCallback, CDVCommandStatus_ERROR)
     }
 }
