@@ -60,6 +60,7 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -518,7 +519,9 @@ public class GoogleApiRequest<T> extends GenericData {
         String loaderId = httpHeaders.getFirstHeaderStringValue("x-guploader-uploadid");
 
         if (loaderId != null) {
-            return (T) new JSONObject().put("loaderId", loaderId);
+            HashMap<String, String> response = new HashMap<>();
+            response.put("loaderId", loaderId);
+            return (T) response;
         }
 
         return httpResponse.parseAs(responseClass);
