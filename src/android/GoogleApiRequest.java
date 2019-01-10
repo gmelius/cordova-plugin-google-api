@@ -518,9 +518,29 @@ public class GoogleApiRequest<T> extends GenericData {
         HttpHeaders httpHeaders = httpResponse.getHeaders();
         String loaderId = httpHeaders.getFirstHeaderStringValue("x-guploader-uploadid");
 
+        // If the request was an upload.
         if (loaderId != null) {
-            HashMap<String, String> response = new HashMap<>();
+            // If the result body is empty, don't send it.
+            boolean injectBody = false;
+            String contentLengthString = httpHeaders.getFirstHeaderStringValue("Content-Length");
+
+            // Check if the ContentLength is not equals to 0.
+            if (contentLengthString != null) {
+                int contentLength = Integer.parseInt(contentLengthString);
+                if (contentLength > 0) {
+                    // If the result body isn't empty, send it with th response
+                    injectBody = true;
+                }
+            }
+
+            HashMap<String, Object> response = new HashMap<>();
             response.put("loaderId", loaderId);
+
+            // Add the result body to the response.
+            if (injectBody) {
+                response.put("body", httpResponse.parseAs(responseClass));
+            }
+
             return (T) response;
         }
 
