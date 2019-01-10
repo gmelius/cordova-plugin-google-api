@@ -165,20 +165,31 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
             if let error = error {
                 self.sendError("\(error.localizedDescription)", command.callbackId)
             } else {
+                var body: String = ""
+
+                if let result = object as? GTLRObject {
+                    body = result.jsonString()
+                } else {
+                    self.sendError("The object returned need to be an GTLRObject !", command.callbackId)
+                }
+
                 if query.uploadParameters != nil {
                     if let loaderId = ticket.objectFetcher?.responseHeaders!["x-guploader-uploadid"] {
-                        self.sendString(self.arrayToJsonString(["loaderId": loaderId])!, command.callbackId)
+                        var result: Dictionary<String, Any> = ["loaderId": loaderId]
+
+                        if (body.count > 0) {
+                            result["body"] = body
+                        }
+
+                        self.send(result, command.callbackId)
                         return
                     }
                 }
                 
-                if let result = object as? GTLRObject {
-                    self.sendString(result.jsonString(), command.callbackId)
-                } else {
-                    self.sendError("The object returned need to be an GTLRObject !", command.callbackId)
-                }
-                return
+                self.sendString(body, command.callbackId)
             }
+            
+            return
         })
     }
     
