@@ -71,13 +71,13 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
     @objc(logout:)
     func logout (command: CDVInvokedUrlCommand) {
         GIDSignIn.sharedInstance().signOut()
-        self.sendString("Logged out")
+        self.sendString("Logged out", command.callbackId)
     }
     
     @objc(disconnect:)
     func disconnect (command: CDVInvokedUrlCommand) {
         GIDSignIn.sharedInstance().disconnect()
-        self.sendString("Disconnected")
+        self.sendString("Disconnected", command.callbackId)
     }
     
     func getGIDSignInObject (_ command: CDVInvokedUrlCommand) -> GIDSignIn! {
