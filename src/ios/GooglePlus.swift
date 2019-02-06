@@ -60,12 +60,19 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
     
     @objc(login:)
     func login (command: CDVInvokedUrlCommand) {
+        GIDSignIn.sharedInstance()?.signOut()
+        GIDSignIn.sharedInstance()?.disconnect()
+        
         self.getGIDSignInObject(command).signIn()
     }
     
     @objc(trySilentLogin:)
     func trySilentLogin (command: CDVInvokedUrlCommand) {
-        self.getGIDSignInObject(command).signInSilently()
+        if (self.authorizer != nil) {
+            self.login(command: command)
+        } else {
+            self.getGIDSignInObject(command)?.signInSilently()
+        }
     }
     
     @objc(logout:)
@@ -100,8 +107,11 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
         let accountName: String! = options["accountName"] as? String
         
         // Initialize sign-in
-        let signInObj: GIDSignIn = GIDSignIn()
-        signInObj.signOut()
+        let signInObj: GIDSignIn = GIDSignIn.init()
+        
+        if (accountName != nil) {
+            signInObj.loginHint = accountName
+        }
         
         signInObj.delegate = self
         signInObj.uiDelegate = self
@@ -115,10 +125,6 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
         
         if (scopesString != nil && !scopesString.isEmpty) {
             signInObj.scopes = scopesString.split(separator: " ").map(String.init)
-        }
-        
-        if (accountName != nil) {
-            signInObj.loginHint = accountName
         }
         
         return signInObj
