@@ -91,7 +91,7 @@
     <pods-config ios-min-version="8.0" use-frameworks="true"></pods-config>
 
     <pod name="GoogleSignIn" spec="~> 4.4.0"/>
-    <pod name="GoogleSigGoogleAPIClientForRESTnIn" spec="~> 1.3.7"/>
+    <pod name="GoogleAPIClientForREST" spec="~> 1.3.7"/>
 
     <!-- <framework src="GoogleSignIn" type="podspec" spec="~> 4.4.0" />
     <framework src="GoogleAPIClientForREST" type="podspec" spec="~> 1.3.7" />
