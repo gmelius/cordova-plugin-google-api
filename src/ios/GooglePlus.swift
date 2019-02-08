@@ -69,7 +69,13 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
     @objc(trySilentLogin:)
     func trySilentLogin (command: CDVInvokedUrlCommand) {
         if (self.authorizer != nil) {
-            self.login(command: command)
+            let options: [String: Any] = command.arguments.first as! [String: Any]
+            let accountName: String! = options["accountName"] as? String
+            if (accountName != nil && self.authorizer?.userEmail == accountName) {
+                self.getGIDSignInObject(command)?.signInSilently()
+            } else {
+                self.login(command: command)
+            }
         } else {
             self.getGIDSignInObject(command)?.signInSilently()
         }
