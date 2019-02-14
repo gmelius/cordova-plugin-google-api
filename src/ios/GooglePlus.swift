@@ -61,7 +61,6 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
     @objc(login:)
     func login (command: CDVInvokedUrlCommand) {
         GIDSignIn.sharedInstance()?.signOut()
-        GIDSignIn.sharedInstance()?.disconnect()
         
         self.getGIDSignInObject(command).signIn()
     }
@@ -113,7 +112,7 @@ class GooglePlus: CDVPlugin, GIDSignInDelegate, GIDSignInUIDelegate {
         let accountName: String! = options["accountName"] as? String
         
         // Initialize sign-in
-        let signInObj: GIDSignIn = GIDSignIn.init()
+        let signInObj: GIDSignIn = GIDSignIn()
         
         if (accountName != nil) {
             signInObj.loginHint = accountName
